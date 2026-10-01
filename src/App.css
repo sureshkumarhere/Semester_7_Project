@@ -253,3 +253,17 @@ body, html, #root, .app-container {
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
+
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  
+  background-color: #ffffff; 
+  color: #0f172a;            
+}
