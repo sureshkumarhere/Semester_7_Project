@@ -1,11 +1,14 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Header from './components/Header';
 import ComplaintForm from './components/ComplaintForm';
 import ChatSidebar from './components/ChatSidebar';
 import { MessageSquareText } from 'lucide-react';
 import './App.css';
 
+import AdminPortal from './components/AdminPortal';
+
 export default function App() {
+  const [activeRoute, setActiveRoute] = useState('portal'); // 'portal' | 'admin'
   const [chatWidth, setChatWidth] = useState(380);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const isDragging = useRef(false);
@@ -33,12 +36,12 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <Header />
+      <Header activeRoute={activeRoute} onNavigate={setActiveRoute} />
 
       <div className="main-content">
-        {/* Left Side: Official Portal Form */}
+        {/* Left Side: Main View (User Portal or Admin Portal) */}
         <div className="portal-section">
-          <ComplaintForm />
+          {activeRoute === 'admin' ? <AdminPortal /> : <ComplaintForm />}
         </div>
 
         {/* Floating Toggle Button when closed */}

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Send, Bot, User, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Send, Bot, AlertCircle, BookOpen } from 'lucide-react';
+import { searchKnowledgeBase, getStoredDocuments } from '../utils/knowledgeBase';
 
 export default function ChatSidebar({ onClose }) {
   const [messages, setMessages] = useState([
@@ -8,9 +9,10 @@ export default function ChatSidebar({ onClose }) {
   const [input, setInput] = useState('');
 
   const handleSend = () => {
-    if (!input.trim()) return;
+    const userQuery = input.trim();
+    if (!userQuery) return;
 
-    const newMessages = [...messages, { role: 'user', text: input }];
+    const newMessages = [...messages, { role: 'user', text: userQuery }];
     setMessages(newMessages);
     setInput('');
 
@@ -28,13 +30,36 @@ export default function ChatSidebar({ onClose }) {
       return;
     }
 
-    // Mock AI response
+    // Search common RAG knowledge base for relevant chunks across all uploaded admin documents
     setTimeout(() => {
+      const relevantChunks = searchKnowledgeBase(userQuery, 3);
+      const totalDocsCount = getStoredDocuments().length;
+
+      let answerText = '';
+      let sourcesList = [];
+
+      if (relevantChunks.length > 0) {
+        sourcesList = Array.from(new Set(relevantChunks.map(c => c.docName)));
+        const primaryContext = relevantChunks[0].content;
+
+        answerText = `Based on our shared RAG Knowledge Base (${sourcesList.join(', ')}):\n\n${primaryContext}`;
+
+        if (relevantChunks.length > 1) {
+          answerText += `\n\nAdditional detail from ${relevantChunks[1].docName}: "${relevantChunks[1].content.slice(0, 160)}..."`;
+        }
+      } else {
+        answerText = `I searched our common RAG knowledge base (${totalDocsCount} documents indexed), but didn't find an exact match for your query. For general network support, please check hostel router connections or log a formal complaint.`;
+      }
+
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: 'I am checking the network guides for your query...' }
+        {
+          role: 'assistant',
+          text: answerText,
+          sources: sourcesList
+        }
       ]);
-    }, 600);
+    }, 500);
   };
 
   return (
@@ -56,7 +81,15 @@ export default function ChatSidebar({ onClose }) {
                 <span>{msg.text}</span>
               </div>
             ) : (
-              msg.text
+              <div>
+                <div className="msg-text">{msg.text}</div>
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="rag-citation">
+                    <BookOpen size={12} />
+                    <span>Source: {msg.sources.join(', ')}</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ))}
