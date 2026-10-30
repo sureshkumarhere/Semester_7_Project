@@ -209,7 +209,9 @@ sequenceDiagram
             ChatService->>DB: Update chat message_count & append fixed refusal turn
             ChatService-->>SPA: 200 OK (Fixed refusal message)
         else On-topic
-            ChatService->>Vector: retrieve_context(query, top_k=6)
+            ChatService->>Router: contextualize_query(user_content, history)
+            Router-->>ChatService: Standalone search query
+            ChatService->>Vector: retrieve_context(search_query, top_k=6)
             Vector-->>ChatService: Matching knowledge base chunks (>0.3 score)
             ChatService->>Router: generate_answer(system_prompt, user_content, history)
             Router-->>ChatService: Assistant Reply String
@@ -238,8 +240,9 @@ sequenceDiagram
 4. **Guard Step (`backend/app/services/llm_router.py:guard_and_classify`)**:
    - Passes user text to `llm_router`. Router attempts providers in order (`LLM_PROVIDER_ORDER`).
    - If off-topic (`on_topic == False`), appends user message and fixed refusal message (*"I can only help with network-related issues..."*) to database, increments `message_count`, and returns HTTP 200 with refusal reply.
-5. **RAG Context Retrieval (`backend/app/services/rag_service.py:retrieve_context`)**:
-   - Calls `vector_store.search(user_content, top_k=12)`.
+5. **Two-Step Query Rewriting & RAG Retrieval (`backend/app/services/llm_router.py:contextualize_query`, `backend/app/services/rag_service.py:retrieve_context`)**:
+   - If prior conversation turns exist, `llm_router.contextualize_query(user_content, history)` reformulates follow-up questions (e.g. resolving pronouns like "it", "that setting") into a standalone technical search query with campus entities (SSIDs, hostels, OS).
+   - Calls `vector_store.search(search_query, top_k=12)`.
    - Filters out chunks below cosine similarity score `0.3`.
    - Concatenates top 6 valid chunks into context block: `[Source: filename]\nchunk text`.
 6. **Prompt Assembly & LLM Generation (`backend/app/services/llm_router.py:generate_answer`)**:

@@ -245,6 +245,23 @@ class LLMRouter:
 
         return await self.providers["mock"].rewrite_assignment_reason(deterministic_reason)
 
+    async def contextualize_query(
+        self,
+        user_message: str,
+        history: List[Dict[str, str]]
+    ) -> str:
+        """Reformulates initial queries (Hinglish/informal to technical) or follow-ups using multi-provider fallback."""
+        clients = self.get_configured_providers()
+        for client in clients:
+            try:
+                res = await client.contextualize_query(user_message, history)
+                if res and res.strip():
+                    return res.strip()
+            except Exception as e:
+                logger.warning(f"[LLMRouter] Provider '{client.provider_name}' failed contextualize_query: {e}. Falling back...")
+
+        return await self.providers["mock"].contextualize_query(user_message, history)
+
 
 # Global singleton instance
 llm_router = LLMRouter()

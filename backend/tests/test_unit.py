@@ -48,3 +48,34 @@ def test_format_chat_transcript():
     assert "--- Chat Transcript (2026-03-31) ---" in formatted
     assert "Student: Wi-Fi is down" in formatted
     assert "Assistant: Please try forgetting the network" in formatted
+
+
+@pytest.mark.asyncio
+async def test_contextualize_query_turn1_expansion():
+    """Verifies Turn 1 query reformulation expands informal Hinglish symptoms into technical terms."""
+    from backend.app.services.llm_client import MockLLMClient
+
+    client = MockLLMClient()
+    query = "wifi pe yellow triangle aa rha h laptop me"
+    result = await client.contextualize_query(query, [])
+
+    # Should expand with technical networking terms for ChromaDB
+    assert any(term in result.lower() for term in ["limited", "dhcp", "ip", "connectivity"])
+
+
+@pytest.mark.asyncio
+async def test_contextualize_query_with_history():
+    """Verifies Turn 2+ query reformulation injects historical network context into vague follow-up turns."""
+    from backend.app.services.llm_client import MockLLMClient
+
+    client = MockLLMClient()
+    history = [
+        {"role": "user", "content": "I cannot connect to eduroam wifi in SVBH hostel"},
+        {"role": "assistant", "content": "Please try to forget the network and reconnect."}
+    ]
+    follow_up = "I tried that, what else should I check?"
+    result = await client.contextualize_query(follow_up, history)
+
+    # Should contain follow up text and at least one historical keyword (wifi, eduroam, or svbh)
+    assert "I tried that, what else should I check?" in result
+    assert any(term in result.lower() for term in ["wifi", "eduroam", "svbh", "hostel"])

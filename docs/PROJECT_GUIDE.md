@@ -147,6 +147,8 @@ sequenceDiagram
     API->>CS: process_chat_message()
     CS->>RS: guard_and_classify()
     RS-->>CS: Check if on-topic
+    CS->>LLM: contextualize_query(history, query)
+    LLM-->>CS: Standalone search query
     CS->>RS: retrieve_context() (Chroma)
     RS-->>CS: Relevant Chunks
     CS->>LLM: generate_response(prompt)
@@ -154,9 +156,9 @@ sequenceDiagram
     CS->>API: Update DB & Return Markdown
     API-->>S: Markdown Reply
 ```
-*Caption: Sequence showing how a student message is classified, augmented with RAG context, and answered.*
+*Caption: Sequence showing how a student message is classified, augmented with contextual RAG retrieval, and answered.*
 **Step-by-Step Explanation**:
-The student POSTs to `process_chat_message` (`chat_service.py`). The RAG service (`rag_service.py`) checks topic relevance via `guard_and_classify`. Then `retrieve_context` fetches similar chunks from ChromaDB. The `chat_system.txt` prompt is augmented, and the `LLMRouter` (`llm_router.py`) calls the active provider.
+The student POSTs to `process_chat_message` (`chat_service.py`). The RAG service (`rag_service.py`) checks topic relevance via `guard_and_classify`. For multi-turn chats, `contextualize_query` reformulates follow-up queries into a standalone technical search query before `retrieve_context` fetches similar chunks from ChromaDB. The `chat_system.txt` prompt is augmented with the retrieved context, and the `LLMRouter` (`llm_router.py`) calls the active provider.
 
 ### 2. "Log request using AI" Flow
 ```mermaid

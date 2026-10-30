@@ -56,6 +56,10 @@ class LLMClient:
         """Friendly one-line rewrite of technician assignment reason."""
         raise NotImplementedError
 
+    async def contextualize_query(self, user_message: str, history: List[Dict[str, str]]) -> str:
+        """Reformulates follow-up user query into standalone technical search query using chat history."""
+        raise NotImplementedError
+
 
 class MockLLMClient(LLMClient):
     """Fallback LLM client for local testing without requiring external API keys."""
@@ -171,6 +175,37 @@ class MockLLMClient(LLMClient):
 
     async def rewrite_assignment_reason(self, deterministic_reason: str) -> str:
         return f"Assigned based on: {deterministic_reason}"
+
+    async def contextualize_query(self, user_message: str, history: List[Dict[str, str]]) -> str:
+        query_lower = user_message.lower()
+
+        # Turn 2+: If history exists, extract prior technical keywords
+        if history:
+            history_text = " ".join([h.get("content", "") for h in history]).lower()
+            keywords = []
+            for kw in ["wifi", "wi-fi", "eduroam", "lan", "cable", "port", "switch", "router", "ip", "dhcp", "proxy", "svbh", "hostel", "windows", "linux", "mac", "dns"]:
+                if kw in history_text and kw not in query_lower:
+                    keywords.append(kw)
+            if keywords:
+                return f"{' '.join(keywords[:3])} {user_message}"
+
+        # Turn 1: Expand informal or Hinglish symptoms into technical knowledge base terms
+        expansions = []
+        if any(w in query_lower for w in ["slow", "speed", "chalti", "slow internet"]):
+            expansions.append("slow internet bandwidth throughput latency")
+        if any(w in query_lower for w in ["yellow", "triangle", "exclamation", "limited"]):
+            expansions.append("limited connectivity no internet DHCP IP address conflict")
+        if any(w in query_lower for w in ["wifi", "wi-fi", "eduroam"]):
+            expansions.append("Wi-Fi connection troubleshooting")
+        if any(w in query_lower for w in ["cable", "port", "socket", "jack", "wire"]):
+            expansions.append("Ethernet switch port LAN cable connection")
+        if any(w in query_lower for w in ["proxy", "8080"]):
+            expansions.append("campus proxy configuration settings")
+
+        if expansions:
+            return f"{' '.join(expansions[:2])} {user_message}"
+
+        return user_message
 
 
 class GeminiLLMClient(LLMClient):
@@ -288,6 +323,24 @@ Respond ONLY with strict JSON:
         text = await self._call_gemini(prompt)
         return text.strip().replace("\n", " ")[:160]
 
+    async def contextualize_query(self, user_message: str, history: List[Dict[str, str]]) -> str:
+        hist_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-4:]]) if history else "None (First Turn)"
+        prompt = (
+            "You are a technical search query reformulator for a campus IT network Knowledge Base (MNNIT Allahabad).\n"
+            "Given the student's message and optional previous chat history, reformulate the query into a concise, standalone technical search query suitable for searching a knowledge base of network SOPs and documentation.\n\n"
+            "Rules:\n"
+            "1. If the message is in Hinglish or informal language (e.g. 'net bohot slow h', 'yellow triangle aa rha h', 'wifi connect nahi ho raha'), translate symptoms into formal technical terms (e.g. 'Wi-Fi throughput latency bandwidth', 'Wi-Fi limited connectivity DHCP IP conflict').\n"
+            "2. If chat history exists, resolve all pronouns ('it', 'that', 'where is that') and retain technical entities (hostel names like SVBH, OS, SSIDs like eduroam).\n"
+            "3. If the message already contains clear technical English, keep and refine it into clean search keywords.\n"
+            "4. Return ONLY the standalone search query without quotes, prefixes, or conversational explanation.\n\n"
+            f"Chat History:\n{hist_str}\n\n"
+            f"Student Message: {user_message}\n\n"
+            "Standalone Search Query:"
+        )
+        text = await self._call_gemini(prompt)
+        cleaned = text.strip().replace('"', '').replace("'", "").strip()
+        return cleaned if cleaned else user_message
+
     async def generate_answer(
         self,
         system_prompt: str,
@@ -371,6 +424,27 @@ class OpenAILLMClient(LLMClient):
             {"role": "user", "content": deterministic_reason}
         ]
         return await self._call_openai(messages)
+
+    async def contextualize_query(self, user_message: str, history: List[Dict[str, str]]) -> str:
+        hist_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-4:]]) if history else "None (First Turn)"
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a technical search query reformulator for a campus network Knowledge Base. "
+                    "Reformulate student messages (converting Hinglish/informal symptoms into formal networking terminology, "
+                    "and resolving pronouns from chat history) into a concise standalone technical search query. "
+                    "Output ONLY the standalone search query without quotes or filler."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Chat History:\n{hist_str}\n\nStudent Message: {user_message}\n\nStandalone Search Query:"
+            }
+        ]
+        text = await self._call_openai(messages)
+        cleaned = text.strip().replace('"', '').replace("'", "").strip()
+        return cleaned if cleaned else user_message
 
     async def generate_answer(
         self,
@@ -479,6 +553,31 @@ Output strict JSON:
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text.strip().replace("\n", " ")[:160]
+
+    async def contextualize_query(self, user_message: str, history: List[Dict[str, str]]) -> str:
+        if not history:
+            return user_message
+
+        hist_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-4:]])
+        prompt = (
+            "Given the following chat history and a follow-up student message about a campus IT network issue, "
+            "reformulate the follow-up message into a concise, standalone technical search query suitable for searching a knowledge base.\n"
+            "- Resolve all pronouns and ambiguous references using the chat history.\n"
+            "- Retain technical terms, locations (e.g. hostels, labs), device OS, and error codes.\n"
+            "- If the message is already standalone or independent, return it as-is.\n"
+            "- Return ONLY the standalone search query without quotes, prefixes, or conversational explanation.\n\n"
+            f"Chat History:\n{hist_str}\n\n"
+            f"Follow-up Student Message: {user_message}\n\n"
+            "Standalone Search Query:"
+        )
+        response = await self.client.messages.create(
+            model=settings.LLM_MODEL_CHAT,
+            max_tokens=100,
+            temperature=0.2,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        cleaned = response.content[0].text.strip().replace('"', '').replace("'", "").strip()
+        return cleaned if cleaned else user_message
 
     async def generate_answer(
         self,
