@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from backend.app.complaint_management.models import (
     StaffRole,
+    ComplaintPriority,
     TechnicianAvailability,
     ComplaintStatus,
     ClosedBy,
@@ -150,6 +151,12 @@ class ResolveComplaintPayload(BaseModel):
     solution: str = Field(..., min_length=5)
     items_used: List[Dict[str, Any]] = []
     asset_actions: List[Dict[str, Any]] = []
+
+
+# Priority Update Payload
+class UpdatePriorityPayload(BaseModel):
+    priority: ComplaintPriority
+    reason: Optional[str] = Field(None, max_length=500)
 
 
 # Mark Junk Payload

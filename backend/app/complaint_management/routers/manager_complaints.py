@@ -7,9 +7,10 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from backend.app.db import get_database
 from backend.app.auth.jwt_auth import require_roles
-from backend.app.complaint_management.models import ComplaintStatus, TechnicianAvailability
+from backend.app.complaint_management.models import ComplaintStatus, TechnicianAvailability, ComplaintPriority, HistoryEventType, HistoryActorType
 from backend.app.complaint_management.schemas import (
     AssignComplaintPayload,
+    UpdatePriorityPayload,
     TechnicianAvailabilityPayload,
     ComplaintDetailResponse,
     ComplaintListResponse,
@@ -391,6 +392,67 @@ async def accept_agent_suggestion(ticket_id: str, staff_user: dict = Depends(req
         return {"message": "Agent suggestion accepted and technician assigned successfully.", "ticket_id": ticket_id}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/complaints/{ticket_id}/priority")
+async def update_complaint_priority(
+    ticket_id: str,
+    payload: UpdatePriorityPayload,
+    staff_user: dict = Depends(require_roles("MANAGER", "ADMIN"))
+):
+    """Allows Admin or Manager to manually update or override complaint priority."""
+    db = get_database()
+    complaint = await db.complaints.find_one({"ticket_id": ticket_id})
+    if not complaint:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint ticket not found")
+
+    if complaint.get("status") in [ComplaintStatus.CLOSED.value, ComplaintStatus.JUNK.value]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot change priority of a {complaint.get('status')} complaint."
+        )
+
+    old_priority = complaint.get("priority", "MEDIUM")
+    new_priority = payload.priority.value if hasattr(payload.priority, "value") else str(payload.priority)
+
+    now = datetime.utcnow()
+    await db.complaints.update_one(
+        {"ticket_id": ticket_id},
+        {"$set": {
+            "priority": new_priority,
+            "updated_at": now
+        }}
+    )
+
+    actor_name = staff_user.get("full_name", "Staff")
+    actor_role = staff_user.get("role", "ADMIN")
+    note = f"Priority changed from {old_priority} to {new_priority} by {actor_name} ({actor_role})."
+    if payload.reason and payload.reason.strip():
+        note += f" Reason: {payload.reason.strip()}"
+
+    await db.complaint_history.insert_one({
+        "ticket_id": ticket_id,
+        "event_type": HistoryEventType.PRIORITY_CHANGE.value,
+        "from_status": complaint.get("status"),
+        "to_status": complaint.get("status"),
+        "actor_type": HistoryActorType.USER.value,
+        "actor_name": actor_name,
+        "note": note,
+        "details": {
+            "old_priority": old_priority,
+            "new_priority": new_priority,
+            "reason": payload.reason.strip() if payload.reason else None,
+            "changed_by": str(staff_user.get("_id"))
+        },
+        "at": now
+    })
+
+    return {
+        "message": f"Priority updated to {new_priority} successfully.",
+        "ticket_id": ticket_id,
+        "old_priority": old_priority,
+        "new_priority": new_priority
+    }
 
 
 @router.post("/complaints/{ticket_id}/assign")

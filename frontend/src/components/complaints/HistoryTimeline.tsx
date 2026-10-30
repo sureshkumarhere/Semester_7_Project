@@ -51,6 +51,8 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({ history }) => 
                       <span className="font-normal text-slate-500">
                         {item.event_type === 'ASSIGNMENT'
                           ? `assigned complaint to ${item.details?.to_technician_name || 'technician'}`
+                          : item.event_type === 'PRIORITY_CHANGE'
+                          ? `updated priority from ${item.details?.old_priority || 'MEDIUM'} to ${item.details?.new_priority || 'NEW'}`
                           : `changed status from ${item.from_status || 'NONE'} to ${item.to_status || 'NEW'}`}
                       </span>
                     </p>

@@ -39,6 +39,7 @@ class HistoryEventType(str, Enum):
     ASSIGNMENT = "ASSIGNMENT"
     JUNK = "JUNK"
     NOTE = "NOTE"
+    PRIORITY_CHANGE = "PRIORITY_CHANGE"
 
 
 class HistoryActorType(str, Enum):

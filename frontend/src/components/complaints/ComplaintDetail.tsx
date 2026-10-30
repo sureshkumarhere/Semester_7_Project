@@ -6,10 +6,11 @@ import { StatusBadge } from './StatusBadge';
 import { HistoryTimeline } from './HistoryTimeline';
 import { StarRating } from './StarRating';
 import { AssignDialog } from './AssignDialog';
+import { ChangePriorityDialog } from './ChangePriorityDialog';
 import { LifecycleStepper } from '../agentic/LifecycleStepper';
 import { AgentAnalysisCard } from '../agentic/AgentAnalysisCard';
 import { markJunk } from '../../api/complaints';
-import { User, Phone, Mail, MapPin, Clock, Wrench, Shield, MessageSquare, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { User, Phone, Flag, Mail, MapPin, Clock, Wrench, Shield, MessageSquare, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 interface ComplaintDetailProps {
   complaint: any;
@@ -26,6 +27,7 @@ export const ComplaintDetail: React.FC<ComplaintDetailProps> = ({
 }) => {
   const [isAssignOpen, setIsAssignOpen] = useState<boolean>(false);
   const [isJunking, setIsJunking] = useState<boolean>(false);
+  const [isPriorityOpen, setIsPriorityOpen] = useState<boolean>(false);
 
   const handleMarkJunk = async () => {
     if (!window.confirm(`Are you sure you want to mark Ticket #${complaint.ticket_id} as JUNK?`)) return;
@@ -52,9 +54,30 @@ export const ComplaintDetail: React.FC<ComplaintDetailProps> = ({
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-xl font-bold text-slate-900 font-mono">Ticket #{complaint.ticket_id}</h1>
               <StatusBadge status={complaint.status} />
+              <button
+                onClick={() => (userRole === 'MANAGER' || userRole === 'ADMIN') && complaint.status !== 'CLOSED' && complaint.status !== 'JUNK' && setIsPriorityOpen(true)}
+                disabled={!(userRole === 'MANAGER' || userRole === 'ADMIN') || complaint.status === 'CLOSED' || complaint.status === 'JUNK'}
+                title={(userRole === 'MANAGER' || userRole === 'ADMIN') && complaint.status !== 'CLOSED' && complaint.status !== 'JUNK' ? 'Click to change priority' : undefined}
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border uppercase transition-transform flex items-center gap-1 ${
+                  (complaint.priority || 'MEDIUM') === 'CRITICAL'
+                    ? 'bg-red-100 text-red-800 border-red-300'
+                    : (complaint.priority || 'MEDIUM') === 'HIGH'
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : (complaint.priority || 'MEDIUM') === 'MEDIUM'
+                    ? 'bg-blue-100 text-blue-800 border-blue-300'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                } ${
+                  (userRole === 'MANAGER' || userRole === 'ADMIN') && complaint.status !== 'CLOSED' && complaint.status !== 'JUNK'
+                    ? 'hover:scale-105 cursor-pointer shadow-xs'
+                    : 'cursor-default'
+                }`}
+              >
+                <Flag className="w-3 h-3" />
+                <span>{complaint.priority || 'MEDIUM'}</span>
+              </button>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Registered on {new Date(complaint.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
@@ -64,6 +87,16 @@ export const ComplaintDetail: React.FC<ComplaintDetailProps> = ({
 
         {/* Role-Aware Action Buttons */}
         <div className="flex items-center gap-2">
+          {(userRole === 'MANAGER' || userRole === 'ADMIN') && complaint.status !== 'CLOSED' && complaint.status !== 'JUNK' && (
+            <button
+              onClick={() => setIsPriorityOpen(true)}
+              className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              title="Change complaint priority level"
+            >
+              <Flag className="w-4 h-4 text-amber-600" />
+              <span>Change Priority</span>
+            </button>
+          )}
           {(userRole === 'MANAGER' || userRole === 'ADMIN') && complaint.status !== 'CLOSED' && complaint.status !== 'JUNK' && (
             <button
               onClick={() => setIsAssignOpen(true)}
@@ -229,6 +262,15 @@ export const ComplaintDetail: React.FC<ComplaintDetailProps> = ({
         isOpen={isAssignOpen}
         onClose={() => setIsAssignOpen(false)}
         onAssigned={onRefresh}
+      />
+
+      {/* Change Priority Modal */}
+      <ChangePriorityDialog
+        ticketId={complaint.ticket_id}
+        currentPriority={complaint.priority || 'MEDIUM'}
+        isOpen={isPriorityOpen}
+        onClose={() => setIsPriorityOpen(false)}
+        onPriorityUpdated={onRefresh}
       />
     </div>
   );

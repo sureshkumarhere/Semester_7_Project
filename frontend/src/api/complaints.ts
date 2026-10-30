@@ -115,6 +115,16 @@ export async function fetchComplaintDetail(ticket_id: string) {
   return fetchApi<any>(`/manager/complaints/${ticket_id}`);
 }
 
+export async function updateComplaintPriority(ticket_id: string, priority: string, reason?: string) {
+  return fetchApi<{ message: string; ticket_id: string; old_priority: string; new_priority: string }>(
+    `/manager/complaints/${ticket_id}/priority`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ priority, reason })
+    }
+  );
+}
+
 export async function assignComplaint(ticket_id: string, technician_id: string, reason?: string) {
   return fetchApi(`/manager/complaints/${ticket_id}/assign`, {
     method: 'POST',
