@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     RAG_AUTO_INDEX_CLOSED: bool = True
     RAG_INCLUDE_AUTO_CLOSED: bool = False
     AGENT_USE_RAG_SIMILARITY: bool = False
+    FLOW_TRACE: bool = True
+    FLOW_TRACE_SLOW_MS: int = 3000
 
     # Multi-Provider LLM Fallback Configuration
     LLM_PROVIDER_ORDER: str = "gemini,openai,grok,anthropic,mock"

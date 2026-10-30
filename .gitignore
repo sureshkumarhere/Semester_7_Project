@@ -24,3 +24,5 @@ data/uploads/
 # Environment variables
 .env
 
+.agents
+AG*

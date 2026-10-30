@@ -59,6 +59,13 @@ async def lifespan(app: FastAPI):
     # Register event listeners
     register_notification_listeners()
 
+    # Load persistent system settings overrides from database
+    try:
+        from backend.app.services.system_settings_service import load_db_overrides_into_settings
+        await load_db_overrides_into_settings()
+    except Exception:
+        pass
+
     # Start background tasks
     from backend.app.agentic.worker import agent_worker_loop, stop_agent_worker
     outbox_task = asyncio.create_task(email_outbox_worker_loop())

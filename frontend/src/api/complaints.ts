@@ -205,14 +205,107 @@ export async function reactivateStaffUser(id: string) {
   });
 }
 
+export interface SystemSettingsData {
+  personal: {
+    notify_on_new_complaint: boolean;
+  };
+  agent: {
+    AGENT_ENABLED: boolean;
+    AGENT_ASSIGNMENT_MODE: 'auto' | 'suggest' | 'off';
+    AGENT_USE_LLM: boolean;
+    AGENT_LLM_REASON: boolean;
+    AGENT_CATEGORY_MIN_CONFIDENCE: number;
+    AGENT_SIMILAR_WINDOW_HOURS: number;
+    AGENT_PREVIOUS_FAULT_DAYS: number;
+    AGENT_HIGH_IMPACT_USERS: number;
+    AGENT_CRITICAL_IMPACT_USERS: number;
+    AGENT_PRIORITY_LOCATIONS: string;
+    AGENT_STUCK_MINUTES: number;
+    AGENT_SWEEP_MINUTES: number;
+    AGENT_MAX_ATTEMPTS: number;
+    AGENT_ASSIGNMENT_WEIGHTS: string;
+    RAG_AUTO_INDEX_CLOSED: boolean;
+    RAG_INCLUDE_AUTO_CLOSED: boolean;
+    AGENT_USE_RAG_SIMILARITY: boolean;
+    FLOW_TRACE?: boolean;
+    FLOW_TRACE_SLOW_MS?: number;
+  };
+  llm: {
+    LLM_PROVIDER_ORDER: string;
+    GEMINI_MODEL: string;
+    GEMINI_TIMEOUT: number;
+    OPENAI_MODEL: string;
+    GROK_MODEL: string;
+    LLM_MODEL_CHAT: string;
+    LLM_MODEL_GUARD: string;
+    has_gemini_key: boolean;
+    masked_gemini_key: string;
+    has_openai_key: boolean;
+    masked_openai_key: string;
+    has_grok_key: boolean;
+    masked_grok_key: string;
+    has_llm_key: boolean;
+    masked_llm_key: string;
+  };
+  email: {
+    EMAIL_BACKEND: 'console' | 'smtp';
+    SMTP_HOST: string;
+    SMTP_PORT: number;
+    SMTP_USER: string;
+    has_smtp_password: boolean;
+    masked_smtp_password: string;
+    SMTP_USE_TLS: boolean;
+    EMAIL_FROM: string;
+    INCHARGE_CC_EMAILS: string;
+  };
+  security: {
+    ALLOWED_EMAIL_DOMAIN: string;
+    OTP_EXPIRE_MINUTES: number;
+    OTP_MAX_ATTEMPTS: number;
+    OTP_RESEND_SECONDS: number;
+    OTP_MAX_RESENDS: number;
+    OTP_MAX_REQUESTS_PER_EMAIL_PER_HOUR: number;
+    LOGIN_MAX_FAILURES: number;
+    LOGIN_LOCK_MINUTES: number;
+  };
+  lifecycle: {
+    AUTO_CLOSE_DAYS: number;
+    AUTO_CLOSE_CHECK_MINUTES: number;
+    ACTION_TOKEN_EXPIRY_DAYS: number;
+    MAX_CHAT_MESSAGES: number;
+    MAX_UPLOAD_MB: number;
+    SCORE_FORMULA: 'average' | 'weighted';
+    SCORE_PRIOR_MEAN: number;
+    SCORE_PRIOR_COUNT: number;
+  };
+  general: {
+    COLLEGE_NAME: string;
+    APP_TIMEZONE: string;
+  };
+}
+
+export async function fetchAllSettings() {
+  return fetchApi<SystemSettingsData>('/admin/settings');
+}
+
+export async function saveAllSettings(payload: Record<string, any>) {
+  return fetchApi<{ message: string; settings: SystemSettingsData }>('/admin/settings', {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function fetchAdminSettings() {
   return fetchApi<any>('/admin/me/settings');
 }
 
-export async function updateAdminSettings(notify_on_new_complaint: boolean) {
+export async function updateAdminSettings(payload: boolean | Record<string, any>) {
+  const body = typeof payload === 'boolean'
+    ? { notify_on_new_complaint: payload }
+    : payload;
   return fetchApi('/admin/me/settings', {
     method: 'PUT',
-    body: JSON.stringify({ notify_on_new_complaint })
+    body: JSON.stringify(body)
   });
 }
 

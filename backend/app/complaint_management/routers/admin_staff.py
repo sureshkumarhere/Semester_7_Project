@@ -277,25 +277,48 @@ async def reactivate_staff_user(id: str, admin_user: dict = Depends(require_role
     return {"message": f"Staff user '{staff_doc['username']}' reactivated successfully."}
 
 
-# Admin settings: toggle notify_on_new_complaint
+# Admin settings: personal & system configuration
 @router.get("/me/settings")
 async def get_admin_settings(admin_user: dict = Depends(require_roles("ADMIN"))):
-    """Returns admin personal settings."""
-    return {"notify_on_new_complaint": admin_user.get("notify_on_new_complaint", False)}
+    """Returns admin personal settings and all system configurations."""
+    from backend.app.services.system_settings_service import get_all_settings
+    res = get_all_settings(admin_user)
+    res["notify_on_new_complaint"] = admin_user.get("notify_on_new_complaint", False)
+    return res
 
 
 @router.put("/me/settings")
 async def update_admin_settings(payload: dict, admin_user: dict = Depends(require_roles("ADMIN"))):
-    """Updates admin notify_on_new_complaint setting."""
-    db = get_database()
-    notify_flag = bool(payload.get("notify_on_new_complaint", False))
+    """Updates admin personal settings and system configurations."""
+    from backend.app.services.system_settings_service import save_settings
+    admin_id = str(admin_user["_id"])
+    updated = await save_settings(payload, admin_user)
+    await log_admin_audit("UPDATE_SETTINGS", admin_id, {"keys": list(payload.keys())})
+    return {
+        "message": "Settings updated successfully",
+        "notify_on_new_complaint": updated.get("personal", {}).get("notify_on_new_complaint", False),
+        "settings": updated
+    }
 
-    await db.staff_users.update_one(
-        {"_id": admin_user["_id"]},
-        {"$set": {"notify_on_new_complaint": notify_flag}}
-    )
 
-    return {"message": "Admin settings updated successfully", "notify_on_new_complaint": notify_flag}
+@router.get("/settings")
+async def get_system_settings_endpoint(admin_user: dict = Depends(require_roles("ADMIN"))):
+    """Returns comprehensive system, agent, LLM, email, security and lifecycle settings."""
+    from backend.app.services.system_settings_service import get_all_settings
+    return get_all_settings(admin_user)
+
+
+@router.put("/settings")
+async def update_system_settings_endpoint(payload: dict, admin_user: dict = Depends(require_roles("ADMIN"))):
+    """Updates system, agent, LLM, email, security and lifecycle settings and syncs to .env and database."""
+    from backend.app.services.system_settings_service import save_settings
+    admin_id = str(admin_user["_id"])
+    updated = await save_settings(payload, admin_user)
+    await log_admin_audit("UPDATE_SYSTEM_SETTINGS", admin_id, {"keys": list(payload.keys())})
+    return {
+        "message": "System settings updated and synchronized successfully",
+        "settings": updated
+    }
 
 
 @router.get("/agent/status")
