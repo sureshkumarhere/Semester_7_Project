@@ -8,7 +8,58 @@ The **Network Asset and Stock Management** module is an isolated, admin-only man
 
 ---
 
-## 2. Domain Class Hierarchy (Mermaid Diagram)
+## 2. Core Architectural Concepts
+
+### 1. Difference Between Asset & Stock
+
+In this system, dono ke liye alag collections aur domain models hain:
+
+| Feature | Asset (`na_assets` collection) | Stock / Consumables (`na_stock_items` collection) |
+| :--- | :--- | :--- |
+| **Kya represent karta hai?** | High-value, durable network equipment / hardware devices. | Consumable inventory items ya spare parts jo repair mein consume ho jaate hain. |
+| **Examples in code** | `SWITCH`, `ROUTER`, `ACCESS_POINT`, `FIREWALL`, `UPS`, `PATCH_PANEL`, `OPTICAL_DEVICE`. | RJ45 Connectors, Cat6 Patch Cables, SFP Modules, Keystones, Crimp plugs, Cable clips. |
+| **Tracking Method** | **Individual Unique Tracking**: Har asset ka apna unique `asset_tag` (e.g. MNNIT-SW-001), `serial_number`, IP address, MAC address, aur firmware version hota hai. | **Quantity-Based Tracking**: Inka koi individual serial number nahi hota. Inhe `quantity_available` aur `minimum_level` se track kiya jata hai. |
+| **Lifecycle Status** | Status transitions hote hain: `IN_USE`, `SPARE`, `FAULTY`, `UNDER_REPAIR`, `REPLACED`, `RETIRED`. | Simple quantity balance: issue (deduct quantity), restock (add quantity), and `is_low` alert jab stock minimum level se kam ho. |
+| **History & Audit** | Full `maintenance_history` (repairs, cost, complaint ID) aur `status_history` maintain hoti hai. | Har stock transaction `na_stock_transactions` collection mein log hoti hai (`complaint_id`, `used_by`, `change`). |
+| **Technician Workflow** | Technician repair ke waqt asset ka status change karta hai (e.g., port/device marked `FAULTY` ya `REPLACED`). | Technician resolution ke time `items_used` specify karta hai (e.g., 2 Patch Cables, 4 RJ45 connectors), jisse stock automatically deduct ho jata hai. |
+
+#### Summary:
+- **Asset**: Ek unique device jo salo tak chalti hai aur maintain/repair hoti hai (jaise Cisco Switch ya Wi-Fi AP). Consume nahi hoti.
+- **Stock**: Ek consumable item jiska dabba ya bundle hota hai aur repair ke dauran use/consume ho jata hai (jaise wire ya connectors).
+
+---
+
+### 2. Location Tracking: Building, Room, ya Single Entity?
+
+Location tracking do alag-alag layers par hoti hai:
+
+#### A. Database Layer: `na_locations` (Hierarchical Parent-Child Tree)
+
+Location single flat entity nahi hai, balki ek hierarchical tree structure hai jo `Location` aur `LocationService` mein defined hai:
+- Har location document mein 4 key fields hote hain:
+  1. `name`: Location ka display name (e.g., "SVBH Hostel" ya "Room 102").
+  2. `code`: Unique code (e.g., "SVBH" ya "SVBH-R102").
+  3. `type`: Enum `LocationType` (`HOSTEL`, `BUILDING`, `LAB`, `ROOM`).
+  4. `parent_id`: Parent location ka reference `_id`.
+- **Parent-Child Relation**:
+  - Building/Hostel (e.g., SVBH Hostel, type: `HOSTEL`) ka `parent_id = None` hota hai (Root Node).
+  - Room (e.g., Room 102, type: `ROOM`) ka `parent_id` us hostel/building ke `_id` ko point karta hai.
+  - In fact, `LocationService.create_location` mein strict validation rule hai:
+    ```python
+    if loc_type == LocationType.ROOM and not parent_id:
+        raise ValueError("Rooms must have a parent building, hostel, or lab assigned.")
+    ```
+
+#### B. Asset & Switch Port Association Layer
+
+- **Assets (`na_assets`)**: Har asset `location_id` field ke through kisi hostel, building, lab ya specific room se linked hota hai.
+- **Switch Ports (`na_switch_ports`)**: Har port ka apna `location_id` hota hai jo map karta hai ki switch port kis specific room/area ko network connectivity provide kar raha hai.
+- **Breadcrumb Resolution**: `LocationService.get_location_path(loc_id)` recursively parent hierarchy traverse karke full breadcrumb generate karta hai (e.g., `SVBH Hostel > Floor 1 > Room 102`).
+- **Tree Visualization**: `LocationService.list_locations_tree()` root nodes se nested children build karta hai UI display ke liye.
+
+---
+
+## 3. Domain Class Hierarchy (Mermaid Diagram)
 
 ```mermaid
 classDiagram
@@ -67,7 +118,7 @@ classDiagram
 
 ---
 
-## 3. MongoDB Collections & Indexes
+## 4. MongoDB Collections & Indexes
 
 | Collection Name | Key Fields | Indexes Created |
 | :--- | :--- | :--- |
@@ -79,7 +130,7 @@ classDiagram
 
 ---
 
-## 4. Key Business Rules
+## 5. Key Business Rules
 1. **Uniqueness**: `serial_number` and `asset_tag` must be globally unique across all assets.
 2. **Lifecycle Transitions**: `FAULTY`, `REPLACED`, or `RETIRED` assets cannot be moved directly to `IN_USE` without passing through `SPARE` or `UNDER_REPAIR` first. Status changes require a justification reason.
 3. **Non-Empty Deletion Shield**: Locations containing active assets, child sub-locations, or mapped switch ports cannot be deleted.
@@ -88,7 +139,7 @@ classDiagram
 
 ---
 
-## 5. API Reference & Sample Payloads
+## 6. API Reference & Sample Payloads
 
 Base path: `/api/admin/network-assets` (Requires `Authorization: Bearer <token>`)
 
@@ -135,7 +186,7 @@ Returns summary metrics card totals.
 
 ---
 
-## 6. Directory Map of Added Files
+## 7. Directory Map of Added Files
 
 - **Backend**: `backend/app/network_assets/`
   - `models.py`, `factory.py`, `schemas.py`, `repository.py`, `services.py`, `router.py`
@@ -153,7 +204,7 @@ Returns summary metrics card totals.
 
 ---
 
-## 7. Seed Data
+## 8. Seed Data
 
 The module provides two database seed scripts located under `scripts_db/`:
 
@@ -178,7 +229,7 @@ The module provides two database seed scripts located under `scripts_db/`:
 
 ---
 
-## 8. Execution Commands
+## 9. Execution Commands
 - Create Indexes: `PYTHONPATH=. python3 scripts_db/create_network_assets_indexes.py`
 - Seed Demo Data: `PYTHONPATH=. python3 scripts_db/seed_network_assets_demo.py`
 - Seed Extended Data: `PYTHONPATH=. python3 scripts_db/seed_network_assets_extended.py`
